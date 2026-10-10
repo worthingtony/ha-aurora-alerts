@@ -24,6 +24,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
 
+  # HACS reads file contents from the version it would install: the default branch,
+  # until there are releases. So on a PR the manifest and hacs.json checks see main, not
+  # the PR; the push to main after merge is the run that counts for them.
+  # description and topics are GitHub repo settings that only HACS's default store
+  # requires; this repo is installed as a custom repository.
   hacs:
     name: HACS
     runs-on: ubuntu-latest
@@ -31,4 +36,4 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          ignore: brands
+          ignore: brands description topics
