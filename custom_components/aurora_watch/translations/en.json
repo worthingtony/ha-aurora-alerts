@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Aurora Watch",
+        "description": "Polls NOAA SWPC every minute for solar wind and GOES magnetometer data and says when aurora is likely visible from home. Darkness comes from sun.sun."
+      }
+    },
+    "abort": {
+      "already_configured": "Aurora Watch is already set up."
+    }
+  }
+}

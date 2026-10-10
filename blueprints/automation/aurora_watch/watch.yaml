@@ -1,0 +1,50 @@
+blueprint:
+  name: Aurora Watch - heads-up for tonight
+  description: >-
+    One normal push when NOAA context says tonight could be active (G2+ now or forecast,
+    a K6+ warning or alert, or a sudden impulse). At most once every 12 hours.
+  domain: automation
+  source_url: https://github.com/worthingtony/aurora-watch/blob/main/blueprints/automation/aurora_watch/watch.yaml
+  input:
+    status_entity:
+      name: Status sensor
+      default: sensor.aurora_watch_status
+      selector:
+        entity:
+          filter:
+            - integration: aurora_watch
+              domain: sensor
+    notify_service:
+      name: Notify service
+      default: notify.mobile_app_tonys_iphone
+      selector:
+        text: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  status_entity: !input status_entity
+  notify_service: !input notify_service
+
+triggers:
+  - trigger: state
+    entity_id: !input status_entity
+    attribute: watch
+    to: true
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ this.attributes.last_triggered is none
+         or (now() - this.attributes.last_triggered).total_seconds() > 12 * 3600 }}
+
+actions:
+  - action: "{{ notify_service }}"
+    data:
+      title: Aurora - watch tonight
+      message: >-
+        {{ state_attr(status_entity, 'watch_reason') }}. Aurora Watch will push again only
+        if Bz, GOES and Kp line up after dark.
+      data:
+        tag: aurora-watch-heads-up
