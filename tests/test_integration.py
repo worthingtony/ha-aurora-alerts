@@ -160,3 +160,32 @@ async def test_saved_spot_sets_darkness_and_its_own_kp(hass, swpc, freezer):
     await hass.services.async_call("select", "select_option", {"entity_id": "select.aurora_watch_location", "option": "Far east"}, blocking=True)
     await hass.async_block_till_done()
     assert hass.states.get("number.aurora_watch_kp_trigger").state == "4.0"
+
+
+async def test_alert_sensors_carry_recent_history_and_links(hass, swpc, freezer):
+    freezer.move_to("2026-10-10T17:52:00+00:00")
+    await _setup(hass)
+    g = hass.states.get("sensor.aurora_watch_glendale").attributes
+    assert g["url"].startswith("https://t.me/GlendaleApp/")
+    assert 1 <= len(g["recent"]) <= 8 and g["recent"][0]["time"] >= g["recent"][-1]["time"]
+    a = hass.states.get("sensor.aurora_watch_swpc_alert").attributes
+    assert a["url"].startswith("https://www.swpc.noaa.gov/") and a["recent"]
+    assert a["recent"][0]["headline"].startswith("ALERT: Geomagnetic K-index of 6")
+
+
+async def test_dashboard_markdown_renders(hass, swpc, freezer):
+    """Every markdown card on the dashboard renders against real entity states."""
+    import yaml
+    from pathlib import Path
+    from homeassistant.helpers.template import Template
+
+    freezer.move_to("2026-10-10T16:40:00+00:00")  # loading incoming, for the get-ready banner
+    await _setup(hass)
+    dash = yaml.safe_load((Path(__file__).resolve().parents[1] / "dashboards" / "aurora.yaml").read_text())
+    cards = [c for c in dash["views"][0]["cards"] if c["type"] == "markdown"]
+    assert len(cards) == 3
+    out = [Template(c["content"], hass).async_render(parse_result=False) for c in cards]
+    assert "UTC" in out[0] and "Sat 10 Oct" in out[0]
+    assert "GET READY" in out[0]
+    assert "t.me/GlendaleApp/" in out[1]
+    assert "swpc.noaa.gov" in out[2]

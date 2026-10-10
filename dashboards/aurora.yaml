@@ -10,6 +10,12 @@ views:
     cards:
       - type: markdown
         content: >-
+          {% set n = now() %}
+          {% set u = utcnow() %}
+          **{{ u.strftime('%a %d %b') }} - {{ u.strftime('%H:%M') }} UTC**
+          &nbsp;|&nbsp; {{ n.strftime('%H:%M %Z') }}
+          &nbsp;|&nbsp; {{ states('select.aurora_watch_location') }}
+
           {% set s = states('sensor.aurora_watch_status') %}
           {% set why = state_attr('sensor.aurora_watch_status', 'reasons') or [] %}
           {% set kind = {'go': 'success', 'elevated': 'warning', 'watch': 'info'} %}
@@ -18,6 +24,11 @@ views:
           {% else %}
           ## {{ s | upper }}
           {{ why | join(' - ') if why else 'Nothing notable.' }}
+          {% endif %}
+          {% set arr = state_attr('binary_sensor.aurora_watch_loading_incoming', 'arrives') %}
+          {% if is_state('binary_sensor.aurora_watch_loading_incoming', 'on') and arr %}
+          <ha-alert alert-type="warning" title="GET READY">Loading arrives ~{{ as_timestamp(arr) | timestamp_custom('%H:%M') }}
+          ({{ ((as_timestamp(arr) - as_timestamp(n)) / 60) | round(0) | int }} min)</ha-alert>
           {% endif %}
 
       - type: custom:apexcharts-card
@@ -130,13 +141,35 @@ views:
             secondary_info: last-changed
 
       - type: markdown
-        title: Latest SWPC alert
+        title: Glendale substorm alerts
+        content: >-
+          {% set recent = state_attr('sensor.aurora_watch_glendale', 'recent') or [] %}
+          {% for g in recent %}
+          {% set icon = ['mdi:flash', 'mdi:circle', 'mdi:circle', 'mdi:circle', 'mdi:alert', 'mdi:alert', 'mdi:alert'][g.level] %}
+          {% set col = ['#90a4ae', '#fdd835', '#fb8c00', '#e53935', '#d81b60', '#8e24aa', '#6a1b9a'][g.level] %}
+          <ha-icon icon="{{ icon }}" style="color: {{ col }}; --mdc-icon-size: 16px"></ha-icon>
+          **{{ as_timestamp(g.time) | timestamp_custom('%a %H:%M') }}**
+          ({{ as_timestamp(g.time) | timestamp_custom('%H:%M', false) }} UTC) -
+          [{{ g.text }}]({{ g.url }})
+
+          {% else %}
+          No Glendale posts read yet.
+          {% endfor %}
+          [Glendale App](https://aurora-alerts.uk/) &nbsp;|&nbsp; [Telegram channel](https://t.me/s/GlendaleApp)
+
+      - type: markdown
+        title: NOAA SWPC alerts (24 h)
         content: >-
           {% set a = 'sensor.aurora_watch_swpc_alert' %}
-          {% if states(a) not in ['unknown', 'unavailable', 'none'] %}
-          **{{ states(a) }}** - {{ as_timestamp(state_attr(a, 'issued')) | timestamp_custom('%a %H:%M') }}
+          {% set recent = state_attr(a, 'recent') or [] %}
+          {% for x in recent %}
+          **{{ as_timestamp(x.time) | timestamp_custom('%a %H:%M') }}**
+          ({{ as_timestamp(x.time) | timestamp_custom('%H:%M', false) }} UTC) - {{ x.headline }}
 
-          <pre>{{ (state_attr(a, 'message') or '')[:1200] }}</pre>
           {% else %}
-          No geomagnetic alerts.
+          No geomagnetic alerts in the last 24 h.
+          {% endfor %}
+          {% if state_attr(a, 'message') %}
+          <details><summary>Latest in full</summary><pre>{{ state_attr(a, 'message')[:1500] }}</pre></details>
           {% endif %}
+          [All SWPC alerts, watches and warnings]({{ state_attr(a, 'url') or 'https://www.swpc.noaa.gov/products/alerts-watches-and-warnings' }})

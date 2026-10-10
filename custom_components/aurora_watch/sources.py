@@ -23,6 +23,7 @@ GOES_SECONDARY = "/json/goes/secondary/magnetometers-6-hour.json"
 GOES_LONGITUDES = "/json/goes/satellite-longitudes.json"
 KP_1M = "/json/planetary_k_index_1m.json"
 ALERTS = "/products/alerts.json"
+ALERTS_PAGE = "https://www.swpc.noaa.gov/products/alerts-watches-and-warnings"
 SCALES = "/products/noaa-scales.json"
 
 
@@ -38,6 +39,8 @@ def parse_glendale(page: str, now: datetime | None = None) -> list[GlendaleAlert
     for block in blocks:
         text_m = re.search(r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', block, re.S)
         time_m = re.search(r'<time datetime="([^"]+)"', block)
+        post_m = re.search(r'data-post="([^"]+)"', block)
+        url = f"https://t.me/{post_m.group(1)}" if post_m else None
         if not (text_m and time_m):
             continue
         try:
@@ -48,7 +51,7 @@ def parse_glendale(page: str, now: datetime | None = None) -> list[GlendaleAlert
         first = text.splitlines()[0].strip() if text else ""
         level_m = re.match(r"([A-Z]+) ALERT\s*:\s*(.*?substorm in progress)", first)
         if level_m and level_m.group(1) in GLENDALE_LEVELS:
-            out.append(GlendaleAlert(posted, GLENDALE_LEVELS[level_m.group(1)], f"{level_m.group(1).title()} alert - {level_m.group(2)}"))
+            out.append(GlendaleAlert(posted, GLENDALE_LEVELS[level_m.group(1)], f"{level_m.group(1).title()} alert - {level_m.group(2)}", url=url))
             continue
         eta_m = re.search(r"(SHOCK|IMF ENHANCEMENT).*?hit Earth at ~(\d{1,2}):(\d{2}) UTC", first)
         if eta_m:
@@ -56,7 +59,7 @@ def parse_glendale(page: str, now: datetime | None = None) -> list[GlendaleAlert
             if arrives < posted - timedelta(hours=1):  # past midnight UTC
                 arrives += timedelta(days=1)
             kind = "Interplanetary shock" if eta_m.group(1) == "SHOCK" else "IMF enhancement"
-            out.append(GlendaleAlert(posted, 0, f"{kind} arriving ~{arrives:%H:%M} UTC", arrives))
+            out.append(GlendaleAlert(posted, 0, f"{kind} arriving ~{arrives:%H:%M} UTC", arrives, url))
     return sorted(out, key=lambda g: g.posted)
 
 

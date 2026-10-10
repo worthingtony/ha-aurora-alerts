@@ -17,6 +17,7 @@ from . import AuroraConfigEntry
 from .const import ATTRIBUTION, DOMAIN, NAME
 from .coordinator import AuroraCoordinator
 from .engine import STATUSES, Result
+from .sources import ALERTS_PAGE
 
 NT = "nT"
 
@@ -50,9 +51,18 @@ def _status_attrs(r: Result) -> dict[str, Any]:
 
 
 def _alert_attrs(r: Result) -> dict[str, Any]:
+    recent = [{"time": a.issued.isoformat(), "headline": a.headline, "product_id": a.product_id} for a in r.alerts_recent]
     if r.alert is None:
-        return {}
-    return {"issued": r.alert.issued.isoformat(), "product_id": r.alert.product_id, "message": r.alert.message}
+        return {"url": ALERTS_PAGE, "recent": recent}
+    return {"issued": r.alert.issued.isoformat(), "product_id": r.alert.product_id, "message": r.alert.message,
+            "url": ALERTS_PAGE, "recent": recent}
+
+
+def _glendale_attrs(r: Result) -> dict[str, Any]:
+    recent = [{"time": g.posted.isoformat(), "text": g.text, "level": g.level, "url": g.url} for g in r.glendale_recent]
+    if r.glendale is None:
+        return {"recent": recent}
+    return {"posted": r.glendale.posted.isoformat(), "level": r.glendale.level, "url": r.glendale.url, "recent": recent}
 
 
 def _measure(key: str, name: str, unit: str | None, fn: Callable[[Result], Any], precision: int = 1, **kw: Any) -> AuroraSensorDescription:
@@ -83,7 +93,7 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     _measure("data_age", "Data age", UnitOfTime.MINUTES, lambda r: r.data_age_min, 0, icon="mdi:clock-alert-outline"),
     AuroraSensorDescription(key="glendale", name="Glendale", icon="mdi:alarm-light-outline",
                             value_fn=lambda r: r.glendale.text[:255] if r.glendale else None,
-                            attrs_fn=lambda r: {"posted": r.glendale.posted.isoformat(), "level": r.glendale.level} if r.glendale else {}),
+                            attrs_fn=_glendale_attrs),
     AuroraSensorDescription(key="alert", name="SWPC alert", icon="mdi:alert-outline",
                             value_fn=lambda r: r.alert.headline[:255] if r.alert else None, attrs_fn=_alert_attrs),
 )
@@ -101,7 +111,7 @@ def device_info() -> DeviceInfo:
 class AuroraSensor(CoordinatorEntity[AuroraCoordinator], SensorEntity):
     _attr_has_entity_name = True
     # The alert's full text is for the dashboard, not for history.
-    _unrecorded_attributes = frozenset({"message"})
+    _unrecorded_attributes = frozenset({"message", "recent"})
     _attr_attribution = ATTRIBUTION
     entity_description: AuroraSensorDescription
 
