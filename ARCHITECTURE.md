@@ -120,7 +120,7 @@ integration. Neither needs code here.
 
 ## Where it lives
 
-A new repo, **`worthingtony/aurora-watch`**, holding the code plus this design record.
+A new repo, **`worthingtony/ha-aurora-alerts`**, holding the code plus this design record.
 HACS needs its own repo, which matches the kitchen-stack pattern in `homelab/REPOS.md`.
 It has to be **public**: HACS cannot install from a private repo, and nothing in it maps the
 network. homelab gets a pointer under `home-automation/`.

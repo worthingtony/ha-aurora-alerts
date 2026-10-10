@@ -4,7 +4,7 @@ blueprint:
     One normal push when NOAA context says tonight could be active (G2+ now or forecast,
     a K6+ warning or alert, or a sudden impulse). At most once every 12 hours.
   domain: automation
-  source_url: https://github.com/worthingtony/aurora-watch/blob/main/blueprints/automation/aurora_watch/watch.yaml
+  source_url: https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/watch.yaml
   input:
     status_entity:
       name: Status sensor

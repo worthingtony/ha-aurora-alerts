@@ -5,7 +5,7 @@ blueprint:
     goes quiet again. It fires on the change into go, never on a timer, so a storm that
     lasts all night does not repeat itself.
   domain: automation
-  source_url: https://github.com/worthingtony/aurora-watch/blob/main/blueprints/automation/aurora_watch/go.yaml
+  source_url: https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/go.yaml
   input:
     status_entity:
       name: Status sensor

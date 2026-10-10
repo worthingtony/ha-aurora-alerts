@@ -8,10 +8,10 @@
     "@tonyinwi"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/worthingtony/aurora-watch",
+  "documentation": "https://github.com/worthingtony/ha-aurora-alerts",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/worthingtony/aurora-watch/issues",
+  "issue_tracker": "https://github.com/worthingtony/ha-aurora-alerts/issues",
   "requirements": [],
   "single_config_entry": true,
   "version": "0.1.0"

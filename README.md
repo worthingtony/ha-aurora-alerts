@@ -20,7 +20,7 @@ Design and reasoning: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Install
 
-1. **HACS** - Custom repositories - `https://github.com/worthingtony/aurora-watch`, category
+1. **HACS** - Custom repositories - `https://github.com/worthingtony/ha-aurora-alerts`, category
    Integration - Download - restart Home Assistant.
 2. **Settings - Devices and services - Add integration - Aurora Watch.** Nothing to fill in.
    Darkness comes from `sun.sun`.
@@ -28,8 +28,8 @@ Design and reasoning: [ARCHITECTURE.md](ARCHITECTURE.md).
 4. **Dashboard:** create a dashboard with url `aurora`, open the raw configuration editor,
    paste [dashboards/aurora.yaml](dashboards/aurora.yaml).
 5. **Notifications:** import the two blueprints, then create one automation from each:
-   - `https://github.com/worthingtony/aurora-watch/blob/main/blueprints/automation/aurora_watch/go.yaml`
-   - `https://github.com/worthingtony/aurora-watch/blob/main/blueprints/automation/aurora_watch/watch.yaml`
+   - `https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/go.yaml`
+   - `https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/watch.yaml`
 
    On iOS, allow **Time Sensitive Notifications** for the Home Assistant app, or the go push
    arrives as a normal one.
