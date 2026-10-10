@@ -1,6 +1,6 @@
 # Aurora Watch dashboard. Phone first: one column, status on top, Bz chart second.
 # Needs apexcharts-card (HACS, RomRider). Everything else is built in.
-# Deploy as a storage-mode dashboard (Raw configuration editor), url path `aurora`.
+# Deploy as a storage-mode dashboard (Raw configuration editor), url path `aurora-watch` (HA requires a hyphen).
 title: Aurora
 views:
   - title: Aurora

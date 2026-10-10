@@ -134,6 +134,7 @@ class Result:
     shock: bool = False
     strong: bool = False
     goes_satellite: int | None = None
+    goes_night_side: bool = False
     hp: float | None = None
     hp_rise: float | None = None
     onset: bool = False
@@ -166,19 +167,27 @@ def local_time_hours(now: datetime, longitude_east: float) -> float:
     return (now.hour + now.minute / 60 + longitude_east / 15) % 24
 
 
-def pick_goes(inputs: Inputs, t: Thresholds) -> int | None:
-    """The satellite nearest local midnight, if any is on the night side."""
-    best: tuple[float, int] | None = None
+def nearest_midnight_goes(inputs: Inputs) -> tuple[int, float] | None:
+    """(satellite, its local time) for the one nearest local midnight, day or night."""
+    best: tuple[float, int, float] | None = None
     for sat, lon in inputs.goes_longitude.items():
         if sat not in inputs.goes:
             continue
         lt = local_time_hours(inputs.now, lon)
-        if not (lt >= t.goes_night_start_lt or lt < t.goes_night_end_lt):
-            continue
         from_midnight = min(lt, 24 - lt)
         if best is None or from_midnight < best[0]:
-            best = (from_midnight, sat)
-    return best[1] if best else None
+            best = (from_midnight, sat, lt)
+    return (best[1], best[2]) if best else None
+
+
+def on_night_side(lt: float, t: Thresholds) -> bool:
+    return lt >= t.goes_night_start_lt or lt < t.goes_night_end_lt
+
+
+def pick_goes(inputs: Inputs, t: Thresholds) -> int | None:
+    """The satellite onsets are read from: nearest local midnight, and on the night side."""
+    found = nearest_midnight_goes(inputs)
+    return found[0] if found and on_night_side(found[1], t) else None
 
 
 def clean_hp(samples: list[HpSample], t: Thresholds) -> list[HpSample]:
@@ -279,11 +288,16 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
         r.shock = median(recent_n) > t.shock_density_ratio * median(prior_n)
 
     # --- GOES onset ---
-    r.goes_satellite = pick_goes(inputs, t)
-    if r.goes_satellite is None:
-        goes_note = "no GOES on the night side"
-    else:
-        r.onset, r.hp, r.hp_rise, goes_note = goes_onset(inputs.goes[r.goes_satellite], now, t)
+    # Hp is always shown for the satellite nearest local midnight, so the chart isn't
+    # empty all day; onsets are only read from it while it is on the night side.
+    found = nearest_midnight_goes(inputs)
+    goes_note = "no GOES on the night side"
+    if found:
+        r.goes_satellite, r.goes_night_side = found[0], on_night_side(found[1], t)
+        raw = [s.hp for s in inputs.goes[r.goes_satellite] if s.hp is not None and s.time <= now]
+        r.hp = raw[-1] if raw else None
+        if r.goes_night_side:
+            r.onset, _, r.hp_rise, goes_note = goes_onset(inputs.goes[r.goes_satellite], now, t)
 
     # --- Reach, darkness, context ---
     kp_now = [k.kp for k in inputs.kp if _minutes(now - k.time) <= t.kp_window_min]
