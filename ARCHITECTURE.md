@@ -51,13 +51,13 @@ So **Bz loads, GOES Hp triggers, and estimated Kp says whether the oval reaches 
 *`products/solar-wind/*.json`, named in the handoff, now returns 404; SWPC retired those files.
 OVATION (936 KB) and hemispheric power were left out of v1 as too heavy for what they add.*
 
-## Status logic (defaults in `const.py`)
+## Status logic (defaults in `engine.Thresholds`)
 
 | Status | Condition |
 |---|---|
 | `watch` | NOAA G2+ watch/warning/alert, a sudden-impulse alert, or G2+ forecast for tonight |
 | `elevated` | **loading:** Bz <= -10 nT for >= 80% of the last 30 min, **or** a shock: density > 2x the prior hour's median |
-| `go` | **dark** (sun < -12 deg) **and fresh** (every input <= 10 min old) **and reach** (estimated Kp >= 5), plus either **onset** (loading, then GOES Hp rises >= 15 nT within 10 min after a decline over the prior 120 min) or **strong driving** (mean Bz <= -15 nT over 30 min and speed >= 600 km/s, because storm-time driving that strong lights the sky without a clean substorm) |
+| `go` | **dark** (sun < -12 deg) **and fresh** (every input <= 10 min old) **and reach** (estimated Kp >= the Kp trigger, default 5), plus either **onset** (loading, then GOES Hp rises >= 15 nT within 10 min after a decline over the prior 120 min) or **strong driving** (mean Bz <= -15 nT over 30 min and speed >= 600 km/s, because storm-time driving that strong lights the sky without a clean substorm) |
 | `quiet` | everything else |
 
 GOES guardrails (from replaying today's storm, where a naive rule fired ~50 false onsets):
@@ -109,7 +109,7 @@ dipolarization at 08:16 UTC). Plus synthetic gaps, stale data and a spacecraft s
 | | Scope |
 |---|---|
 | **v1** | sources above, engine, entities, config flow, blueprints, dashboard, tests |
-| **v1.1** | Glendale and Churchill as extra onset votes; options flow if tuning by editing `const.py` gets old |
+| **v1.1** | Glendale and Churchill as extra onset votes; options flow if tuning by editing `engine.py` gets old |
 | **later** | Facebook (below), an event log for tuning against what was actually seen |
 
 **Facebook is deliberately outside the integration.** Meta has had no Groups API since
