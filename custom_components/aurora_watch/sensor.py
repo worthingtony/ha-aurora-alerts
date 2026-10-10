@@ -39,6 +39,7 @@ def _status_attrs(r: Result) -> dict[str, Any]:
         "watch_reason": r.watch_reason,
         "kp_trigger": r.kp_reach,
         "goes_satellite": r.goes_satellite,
+        "goes_night_side": r.goes_night_side,
         "go_started": r.go_started.isoformat() if r.go_started else None,
         "go_ended": r.go_ended.isoformat() if r.go_ended else None,
     }
@@ -70,7 +71,8 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     _measure("bz_south_fraction", "Bz south fraction", PERCENTAGE,
              lambda r: None if r.bz_south_fraction is None else round(r.bz_south_fraction * 100), 0, icon="mdi:arrow-down-bold"),
     _measure("minutes_south", "Minutes south", UnitOfTime.MINUTES, lambda r: r.minutes_south, 0, icon="mdi:timer-sand"),
-    _measure("goes_hp", "GOES Hp", NT, lambda r: r.hp, icon="mdi:satellite-variant"),
+    _measure("goes_hp", "GOES Hp", NT, lambda r: r.hp, icon="mdi:satellite-variant",
+             attrs_fn=lambda r: {"satellite": r.goes_satellite, "night_side": r.goes_night_side}),
     _measure("kp", "Kp estimated", None, lambda r: r.kp, 2, icon="mdi:gauge"),
     _measure("g_now", "G scale now", None, lambda r: r.g_now, 0, icon="mdi:alpha-g-box"),
     _measure("g_forecast", "G scale tonight", None, lambda r: r.g_forecast, 0, icon="mdi:alpha-g-box-outline"),

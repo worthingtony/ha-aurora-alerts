@@ -25,7 +25,7 @@ Design and reasoning: [ARCHITECTURE.md](ARCHITECTURE.md).
 2. **Settings - Devices and services - Add integration - Aurora Watch.** Nothing to fill in.
    Darkness comes from `sun.sun`.
 3. **apexcharts-card** from HACS (Frontend), for the dashboard.
-4. **Dashboard:** create a dashboard with url `aurora`, open the raw configuration editor,
+4. **Dashboard:** create a dashboard with url `aurora-watch` (HA requires a hyphen), open the raw configuration editor,
    paste [dashboards/aurora.yaml](dashboards/aurora.yaml).
 5. **Notifications:** import the two blueprints, then create one automation from each:
    - `https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/go.yaml`

@@ -151,6 +151,14 @@ def test_dayside_crossings_and_compression_are_not_onsets(replay):
     assert hits == []
 
 
+def test_hp_is_shown_in_daytime_but_onsets_are_not_read(replay):
+    """Installed 2026-10-10: goes_hp sat at unknown all afternoon because both GOES were
+    on the dayside. It now shows the satellite nearest midnight, flagged as dayside."""
+    r = engine.evaluate(replay.inputs(utc("2026-10-10T17:00:00")))
+    assert r.goes_satellite == 18 and r.hp is not None  # 07:52 local beats GOES-19 at 12:10
+    assert not r.goes_night_side and not r.onset and r.hp_rise is None
+
+
 def test_satellite_nearest_local_midnight_is_used(replay):
     inputs = replay.inputs(utc("2026-10-10T04:50:00"))  # GOES-19 at local midnight
     assert engine.pick_goes(inputs, engine.Thresholds()) == 19
