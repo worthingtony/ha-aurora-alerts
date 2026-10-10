@@ -58,6 +58,15 @@ class Thresholds:
     sun_dark_elevation: float = -12.0
     # Expansion phase: hold go this long after a trigger.
     go_latch_min: int = 30
+    # Glendale App (Telegram): its ground-magnetometer substorm alerts are a second onset
+    # vote beside GOES. Levels: 1 yellow, 2 orange, 3 red, 4 major, 5 severe, 6 extreme.
+    # Its orange at 08:29 UTC 2026-10-10 matched the real GOES-18 onset at 08:16.
+    glendale_min_level: int = 2
+    glendale_window_min: int = 20
+    # Loading incoming: south Bz in data that has not reached Earth yet. The propagated
+    # feed runs ~20-50 min ahead of arrival, so this is the "get outside" lead time.
+    incoming_window_min: int = 45
+    incoming_min_samples: int = 10
     # NOAA context for watch.
     watch_g_scale: int = 2
     alert_lookback_h: float = 6.0
@@ -105,6 +114,17 @@ class Alert:
         return "Geomagnetic" in self.message
 
 
+GLENDALE_LEVELS = {"YELLOW": 1, "ORANGE": 2, "RED": 3, "MAJOR": 4, "SEVERE": 5, "EXTREME": 6}
+
+
+@dataclass(frozen=True)
+class GlendaleAlert:
+    posted: datetime
+    level: int  # GLENDALE_LEVELS, or 0 for a shock / IMF warning
+    text: str
+    arrives: datetime | None = None  # for shock and IMF-enhancement warnings
+
+
 @dataclass
 class Inputs:
     now: datetime
@@ -117,6 +137,7 @@ class Inputs:
     g_forecast: int | None = None  # max G for today and tomorrow (UTC), i.e. tonight
     sun_elevation: float | None = None
     last_go: datetime | None = None  # when a go trigger last held, for the latch
+    glendale: list[GlendaleAlert] = field(default_factory=list)  # ascending by posted
 
 
 @dataclass
@@ -135,6 +156,13 @@ class Result:
     strong: bool = False
     goes_satellite: int | None = None
     goes_night_side: bool = False
+    glendale_onset: bool = False
+    glendale: GlendaleAlert | None = None  # latest substorm alert, for display
+    incoming: bool = False
+    incoming_at: datetime | None = None  # absolute, so attributes don't tick every minute
+    incoming_reason: str | None = None
+    sun_elevation: float | None = None
+    location: str | None = None  # set by the coordinator
     hp: float | None = None
     hp_rise: float | None = None
     onset: bool = False
@@ -311,8 +339,39 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
     geo = [a for a in inputs.alerts if a.geomagnetic and now - a.issued < timedelta(hours=t.alert_display_h)]
     r.alert = max(geo, key=lambda a: a.issued) if geo else None
 
+    # --- Glendale: a second onset vote, from ground magnetometers ---
+    substorms = [g for g in inputs.glendale if g.level > 0 and g.posted <= now]
+    r.glendale = substorms[-1] if substorms else None
+    r.glendale_onset = any(
+        g.level >= t.glendale_min_level and now - g.posted <= timedelta(minutes=t.glendale_window_min) for g in substorms
+    )
+
+    # --- Loading incoming: south Bz already measured at L1, not yet arrived ---
+    # Judge the leading edge (the newest samples, which arrive last): only ~20 min of
+    # data lies ahead, so requiring all of it to be south would warn a minute early.
+    upcoming = [s for s in inputs.wind if now < s.arrives <= now + timedelta(minutes=t.incoming_window_min) and s.bz is not None]
+    edge = upcoming[-t.incoming_min_samples:]
+    if len(edge) >= t.incoming_min_samples and not r.loaded:
+        if sum(s.bz <= t.bz_south for s in edge) / len(edge) >= t.south_fraction:
+            start = edge[0]
+            for s in reversed(upcoming):  # back to where the south stretch begins
+                if s.arrives >= edge[0].arrives:
+                    continue
+                if s.bz > t.bz_south:
+                    break
+                start = s
+            r.incoming = True
+            r.incoming_at = max(start.arrives, now).replace(second=0, microsecond=0)
+            r.incoming_reason = f"south Bz arriving ~{r.incoming_at:%H:%M} UTC"
+    shocks = [g for g in inputs.glendale if g.level == 0 and g.arrives and now - timedelta(minutes=5) <= g.arrives <= now + timedelta(minutes=t.incoming_window_min + 15)]
+    if shocks and not r.incoming:
+        r.incoming = True
+        r.incoming_at = max(shocks[-1].arrives, now).replace(second=0, microsecond=0)
+        r.incoming_reason = f"shock arriving ~{r.incoming_at:%H:%M} UTC (Glendale)"
+    r.sun_elevation = inputs.sun_elevation
+
     # --- Decide ---
-    onset = r.onset and loaded_recently
+    onset = (r.onset or r.glendale_onset) and loaded_recently
     trigger = onset or r.strong
     if r.loaded:
         why.append(f"Bz <= {t.bz_south:g} for most of the last {t.south_window_min} min")
@@ -322,8 +381,12 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
         why.append(f"strong driving: mean Bz <= {t.strong_bz_mean:g} nT, speed >= {t.strong_speed:g} km/s")
     if r.onset:
         why.append(f"GOES-{r.goes_satellite} Hp jump - substorm onset" + ("" if loaded_recently else ", but not loaded beforehand"))
-    elif goes_note and (r.loaded or r.strong):
+    elif goes_note and (r.loaded or r.strong) and not r.glendale_onset:
         why.append(goes_note)
+    if r.glendale_onset and r.glendale:
+        why.append(f"Glendale: {r.glendale.text}" + ("" if loaded_recently else ", but not loaded beforehand"))
+    if r.incoming and r.incoming_reason:
+        why.append(f"incoming: {r.incoming_reason}")
 
     latch = inputs.last_go is not None and now - inputs.last_go < timedelta(minutes=t.go_latch_min)
     can_go = r.fresh and reach and r.dark is True

@@ -186,3 +186,49 @@ def test_watch_from_noaa(replay):
     assert not quiet.watch and quiet.status == engine.QUIET
     forecast = engine.evaluate(replay.inputs(utc("2026-10-07T12:00:00"), sun_elevation=30.0, g_forecast=2))
     assert forecast.status == engine.WATCH
+
+
+# --- Glendale ---------------------------------------------------------------------
+
+
+def test_glendale_page_parses(replay):
+    levels = [(g.posted.strftime("%H:%M"), g.level) for g in replay.glendale if g.posted.day == 10]
+    assert ("08:29", 2) in levels and ("17:48", 6) in levels
+    shock = next(g for g in replay.glendale if g.text.startswith("Interplanetary shock"))
+    assert shock.arrives == utc("2026-10-10T15:31:00") and shock.level == 0
+    assert sources.parse_glendale("<html>nothing here</html>") == []
+
+
+def test_glendale_onset_counts_only_after_loading(replay):
+    """Extreme alert 17:48, Bz loaded: an onset vote. Orange 08:29, Bz not loaded: noted only."""
+    r = engine.evaluate(replay.inputs(utc("2026-10-10T17:52:00")))
+    assert r.glendale_onset and r.glendale.level == 6 and r.status == engine.GO
+    early = engine.evaluate(replay.inputs(utc("2026-10-10T08:35:00")))
+    assert early.glendale_onset and early.status != engine.GO
+    assert any("not loaded beforehand" in why for why in early.reasons)
+
+
+def test_glendale_alone_never_makes_go_without_reach(replay):
+    r = engine.evaluate(replay.inputs(utc("2026-10-10T08:35:00"), sun_elevation=-30.0))
+    assert r.kp < 5 and r.status != engine.GO
+
+
+# --- Loading incoming -------------------------------------------------------------
+
+
+def test_loading_incoming_gives_lead_time(replay):
+    """Bz -20 nT reached Earth ~17:02 UTC Oct 10; the L1 data showed it from 16:35."""
+    r = engine.evaluate(replay.inputs(utc("2026-10-10T16:35:00"), glendale=False))
+    assert r.incoming and not r.loaded
+    assert (r.incoming_at - utc("2026-10-10T16:35:00")) >= timedelta(minutes=20)
+    assert "arriving ~" in r.incoming_reason
+
+
+def test_no_incoming_on_quiet_days(replay):
+    hits = [t for t, r in walk(replay, "2026-10-06T00:00:00", "2026-10-09T23:50:00", step=10, glendale=False) if r.incoming]
+    assert hits == []
+
+
+def test_glendale_shock_warning_is_incoming(replay):
+    r = engine.evaluate(replay.inputs(utc("2026-10-10T14:50:00")))
+    assert r.incoming and "shock" in r.incoming_reason and r.incoming_at == utc("2026-10-10T15:31:00")

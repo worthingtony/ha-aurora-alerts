@@ -2,7 +2,8 @@
   "domain": "aurora_watch",
   "name": "Aurora Watch",
   "after_dependencies": [
-    "sun"
+    "sun",
+    "zone"
   ],
   "codeowners": [
     "@tonyinwi"

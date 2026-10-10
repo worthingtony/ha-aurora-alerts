@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
 import aiohttp
+from astral import Observer
+from astral.sun import elevation as sun_elevation
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -19,8 +22,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from . import sources
-from .const import DOMAIN, INTERVALS, TICK, WIND_HISTORY
-from .engine import GO, Alert, HpSample, Inputs, KpSample, Result, Thresholds, WindSample, evaluate
+from .const import DOMAIN, HOME_ZONE, INTERVALS, TICK, WIND_HISTORY
+from .engine import GO, Alert, GlendaleAlert, HpSample, Inputs, KpSample, Result, Thresholds, WindSample, evaluate
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +48,31 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
         self._go_started: datetime | None = None
         self._go_ended: datetime | None = None
         self._failing: set[str] = set()
+        self._glendale: list[GlendaleAlert] = []
+        # Saved spots are HA zones. Darkness and the Kp trigger follow the selected one.
+        self.location: str = HOME_ZONE
+        self.kp_by_location: dict[str, float] = {}
+
+    def set_location(self, zone: str) -> None:
+        self.location = zone
+        self.thresholds = replace(self.thresholds, kp_reach=self.kp_by_location.get(zone, Thresholds().kp_reach))
+
+    def set_kp(self, value: float) -> None:
+        self.kp_by_location[self.location] = round(value, 2)
+        self.thresholds = replace(self.thresholds, kp_reach=round(value, 2))
+
+    def _location_elevation(self, now: datetime) -> float | None:
+        """Sun elevation at the selected zone; sun.sun if the zone has no coordinates."""
+        zone = self.hass.states.get(self.location)
+        try:
+            lat, lon = float(zone.attributes["latitude"]), float(zone.attributes["longitude"])
+            return sun_elevation(Observer(lat, lon), now)
+        except (AttributeError, KeyError, TypeError, ValueError):
+            sun = self.hass.states.get("sun.sun")
+            try:
+                return float(sun.attributes["elevation"]) if sun else None
+            except (KeyError, TypeError, ValueError):
+                return None
 
     async def _get(self, path: str) -> Any:
         async with asyncio.timeout(30):
@@ -83,6 +111,11 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
             self._alerts = sources.parse_alerts(await self._get(sources.ALERTS))
         elif feed == "scales":
             self._scales = sources.parse_scales(await self._get(sources.SCALES))
+        elif feed == "glendale":
+            async with asyncio.timeout(30):
+                resp = await self._session.get(sources.GLENDALE_URL)
+                resp.raise_for_status()
+                self._glendale = sources.parse_glendale(await resp.text())
         elif feed == "longitudes":
             self._longitudes = sources.parse_longitudes(await self._get(sources.GOES_LONGITUDES)) or self._longitudes
         self._fetched[feed] = now
@@ -103,11 +136,7 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
         if not self._wind and "wind" not in self._fetched:
             raise UpdateFailed("No solar wind data from SWPC yet")
 
-        sun = self.hass.states.get("sun.sun")
-        try:
-            elevation = float(sun.attributes["elevation"]) if sun else None
-        except (KeyError, TypeError, ValueError):
-            elevation = None
+        elevation = self._location_elevation(now)
 
         g_now, g_forecast = self._scales
         result = evaluate(
@@ -122,6 +151,7 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
                 g_forecast=g_forecast,
                 sun_elevation=elevation,
                 last_go=self._last_go,
+                glendale=self._glendale,
             ),
             self.thresholds,
         )
@@ -132,4 +162,5 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
             self._go_ended = now
         self._status = result.status
         result.go_started, result.go_ended = self._go_started, self._go_ended
+        result.location = self.location
         return result

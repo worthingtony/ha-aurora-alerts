@@ -40,6 +40,10 @@ def _status_attrs(r: Result) -> dict[str, Any]:
         "kp_trigger": r.kp_reach,
         "goes_satellite": r.goes_satellite,
         "goes_night_side": r.goes_night_side,
+        "location": r.location,
+        "sun_elevation": None if r.sun_elevation is None else round(r.sun_elevation, 1),
+        "incoming": r.incoming,
+        "glendale_onset": r.glendale_onset,
         "go_started": r.go_started.isoformat() if r.go_started else None,
         "go_ended": r.go_ended.isoformat() if r.go_ended else None,
     }
@@ -77,6 +81,9 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     _measure("g_now", "G scale now", None, lambda r: r.g_now, 0, icon="mdi:alpha-g-box"),
     _measure("g_forecast", "G scale tonight", None, lambda r: r.g_forecast, 0, icon="mdi:alpha-g-box-outline"),
     _measure("data_age", "Data age", UnitOfTime.MINUTES, lambda r: r.data_age_min, 0, icon="mdi:clock-alert-outline"),
+    AuroraSensorDescription(key="glendale", name="Glendale", icon="mdi:alarm-light-outline",
+                            value_fn=lambda r: r.glendale.text[:255] if r.glendale else None,
+                            attrs_fn=lambda r: {"posted": r.glendale.posted.isoformat(), "level": r.glendale.level} if r.glendale else {}),
     AuroraSensorDescription(key="alert", name="SWPC alert", icon="mdi:alert-outline",
                             value_fn=lambda r: r.alert.headline[:255] if r.alert else None, attrs_fn=_alert_attrs),
 )

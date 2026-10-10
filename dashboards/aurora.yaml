@@ -118,8 +118,16 @@ views:
             entity: sensor.aurora_watch_g_scale_now
       - type: entities
         entities:
+          - entity: select.aurora_watch_location
+            name: Watching from
           - entity: number.aurora_watch_kp_trigger
-            name: Kp needed for go
+            name: Kp needed for go (this spot)
+          - entity: binary_sensor.aurora_watch_loading_incoming
+            name: Loading incoming
+            secondary_info: last-changed
+          - entity: sensor.aurora_watch_glendale
+            name: Glendale
+            secondary_info: last-changed
 
       - type: markdown
         title: Latest SWPC alert

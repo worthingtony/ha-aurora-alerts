@@ -57,6 +57,8 @@ class Replay:
         first_1m = kp1m[0].time if kp1m else None
         self.kp = sorted([k for k in three_hourly if first_1m is None or k.time < first_1m] + kp1m, key=lambda k: k.time)
         self.alerts = sources.parse_alerts(load("alerts.json"))
+        with gzip.open(FIXTURES / "glendale-telegram.html.gz", "rt") as f:
+            self.glendale = sources.parse_glendale(f.read())
 
     def inputs(self, now: datetime, sun_elevation: float = -20.0, last_go=None, **kw) -> engine.Inputs:
         seen = now - self.LATENCY
@@ -71,6 +73,7 @@ class Replay:
             g_forecast=kw.get("g_forecast"),
             sun_elevation=sun_elevation,
             last_go=last_go,
+            glendale=[g for g in self.glendale if g.posted <= now] if kw.get("glendale", True) else [],
         )
 
 
