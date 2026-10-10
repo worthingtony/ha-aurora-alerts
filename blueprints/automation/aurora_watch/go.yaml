@@ -31,7 +31,7 @@ blueprint:
             - domain: weather
     cooldown:
       name: Cooldown (minutes)
-      description: If go drops out and comes back within this time, stay silent.
+      description: If go ends and comes back within this time, stay silent.
       default: 45
       selector:
         number:
@@ -70,18 +70,21 @@ triggers:
     entity_id: !input status_entity
     from: [go, elevated]
     to: quiet
+    for: "00:10:00"
     id: clear
 
 conditions:
+  # Both read go_started/go_ended, which move only when go starts or ends, so the clear
+  # note can never eat the cooldown of a real go.
   - condition: template
     value_template: >-
+      {% set a = trigger.to_state.attributes %}
       {% if trigger.id == 'go' %}
-        {{ this.attributes.last_triggered is none
-           or (now() - this.attributes.last_triggered).total_seconds() > cooldown * 60 }}
+        {{ a.go_ended is none
+           or (now() - as_datetime(a.go_ended)).total_seconds() > cooldown * 60 }}
       {% else %}
-        {% set last = state_attr(status_entity, 'last_go') %}
-        {{ send_clear and last is not none
-           and (now() - as_datetime(last)).total_seconds() < 6 * 3600 }}
+        {{ send_clear and a.go_ended is not none
+           and (now() - as_datetime(a.go_ended)).total_seconds() < 6 * 3600 }}
       {% endif %}
 
 actions:
@@ -90,10 +93,10 @@ actions:
       cloud_note: >-
         {% if cloud is number and cloud >= 50 %} - but {{ cloud | round(0) | int }}% cloud{% endif %}
       body: >-
-        Bz {{ state_attr(status_entity, 'bz') | float(0) | round(1) }} nT, south
-        {{ state_attr(status_entity, 'minutes_south') | int(0) }} min, wind
-        {{ state_attr(status_entity, 'speed') | float(0) | round(0) | int }} km/s, Kp
-        {{ state_attr(status_entity, 'kp') | float(0) | round(1) }}{{ cloud_note }}.
+        Bz {{ states('sensor.aurora_watch_bz') | float(0) | round(1) }} nT, south
+        {{ states('sensor.aurora_watch_minutes_south') | int(0) }} min, wind
+        {{ states('sensor.aurora_watch_solar_wind_speed') | float(0) | round(0) | int }} km/s, Kp
+        {{ states('sensor.aurora_watch_kp_estimated') | float(0) | round(1) }}{{ cloud_note }}.
         {{ (state_attr(status_entity, 'reasons') or [])[:2] | join('; ') }}
   - choose:
       - conditions: "{{ trigger.id == 'clear' }}"

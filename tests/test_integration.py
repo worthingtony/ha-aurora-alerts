@@ -41,7 +41,7 @@ async def test_config_flow_is_single_instance(hass):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     again = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert again["type"] is FlowResultType.ABORT and again["reason"] == "already_configured"
+    assert again["type"] is FlowResultType.ABORT and again["reason"] in ("already_configured", "single_instance_allowed")
 
 
 async def _ok(*_):
@@ -58,12 +58,14 @@ async def test_storm_after_dark_is_go(hass, swpc, freezer):
 
     status = hass.states.get("sensor.aurora_watch_status")
     assert status.state == "go", status.attributes["reasons"]
-    assert status.attributes["strong_driving"] and status.attributes["last_go"]
+    assert status.attributes["strong_driving"] and status.attributes["go_started"]
+    assert status.attributes["go_ended"] is None
     assert float(hass.states.get("sensor.aurora_watch_bz").state) <= -10
     assert float(hass.states.get("sensor.aurora_watch_solar_wind_speed").state) >= 600
     assert float(hass.states.get("sensor.aurora_watch_data_age").state) <= 10
     assert hass.states.get("binary_sensor.aurora_watch_dark_enough").state == "on"
     assert hass.states.get("sensor.aurora_watch_g_scale_now").state == "2"
+    assert "message" in hass.states.get("sensor.aurora_watch_swpc_alert").attributes
     assert hass.states.get("sensor.aurora_watch_swpc_alert").state.startswith("ALERT: Geomagnetic K-index of 6")
     # The 7-day seed is fetched once; later ticks use the 7 KB file.
     assert any(str(call[1]).endswith(sources.WIND_7D) for call in swpc.mock_calls)

@@ -1,12 +1,18 @@
 {
   "domain": "aurora_watch",
   "name": "Aurora Watch",
-  "codeowners": ["@tonyinwi"],
+  "after_dependencies": [
+    "sun"
+  ],
+  "codeowners": [
+    "@tonyinwi"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/worthingtony/aurora-watch",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/worthingtony/aurora-watch/issues",
   "requirements": [],
+  "single_config_entry": true,
   "version": "0.1.0"
 }

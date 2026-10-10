@@ -88,6 +88,28 @@ def test_missing_data_is_quiet_not_a_crash(replay):
     assert r.status in (engine.QUIET, engine.WATCH) and r.data_age_min is None
 
 
+def test_one_late_update_does_not_drop_go(replay):
+    """Review finding: go -> 12-min-old data -> quiet sent 'quiet again', then the
+    cooldown ate the real go a minute later. The latch now holds through it."""
+    now = utc("2026-10-10T17:40:00")
+    inputs = replay.inputs(now, last_go=now - timedelta(minutes=1))
+    inputs.wind = [s for s in inputs.wind if s.observed <= now - timedelta(minutes=12)]
+    r = engine.evaluate(inputs)
+    assert not r.fresh and r.status == engine.GO
+
+
+def test_reasons_do_not_change_tick_to_tick(replay):
+    """Stable text keeps the recorder from writing a new attributes row every minute."""
+    a = engine.evaluate(replay.inputs(utc("2026-10-10T17:35:00")))
+    b = engine.evaluate(replay.inputs(utc("2026-10-10T17:40:00")))
+    assert a.status == b.status == engine.GO and a.reasons == b.reasons
+
+
+def test_old_alerts_are_not_shown(replay):
+    r = engine.evaluate(replay.inputs(utc("2026-10-08T12:00:00"), sun_elevation=30.0))
+    assert r.alert is None or utc("2026-10-08T12:00:00") - r.alert.issued < timedelta(hours=24)
+
+
 def test_go_latches_through_expansion(replay):
     now = utc("2026-10-10T17:40:00")
     inputs = replay.inputs(now, last_go=now - timedelta(minutes=10))

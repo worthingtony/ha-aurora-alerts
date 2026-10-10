@@ -7,7 +7,8 @@
       }
     },
     "abort": {
-      "already_configured": "Aurora Watch is already set up."
+      "already_configured": "Aurora Watch is already set up.",
+      "single_instance_allowed": "Aurora Watch is already set up."
     }
   }
 }

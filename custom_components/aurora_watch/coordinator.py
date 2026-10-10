@@ -20,7 +20,7 @@ from homeassistant.util import dt as dt_util
 
 from . import sources
 from .const import DOMAIN, INTERVALS, TICK, WIND_HISTORY
-from .engine import Alert, HpSample, Inputs, KpSample, Result, Thresholds, WindSample, evaluate
+from .engine import GO, Alert, HpSample, Inputs, KpSample, Result, Thresholds, WindSample, evaluate
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +41,10 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
         self._alerts: list[Alert] = []
         self._scales: tuple[int | None, int | None] = (None, None)
         self._last_go: datetime | None = None
+        self._status: str | None = None
+        self._go_started: datetime | None = None
+        self._go_ended: datetime | None = None
+        self._failing: set[str] = set()
 
     async def _get(self, path: str) -> Any:
         async with asyncio.timeout(30):
@@ -55,7 +59,14 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
     async def _fetch(self, feed: str, now: datetime) -> None:
         if feed == "wind":
             # Seed 7 days once so the 120-min loading lookback works from the first tick.
-            rows = await self._get(sources.WIND_1H if self._wind else sources.WIND_7D)
+            # If the big file fails, start from the 1-hour one rather than not at all.
+            if self._wind:
+                rows = await self._get(sources.WIND_1H)
+            else:
+                try:
+                    rows = await self._get(sources.WIND_7D)
+                except (aiohttp.ClientError, TimeoutError, ValueError):
+                    rows = await self._get(sources.WIND_1H)
             for s in sources.parse_wind(rows):
                 self._wind[s.observed] = s
             cutoff = now - WIND_HISTORY
@@ -81,10 +92,14 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
         due = [f for f in INTERVALS if self._due(f, now)]
         results = await asyncio.gather(*(self._fetch(f, now) for f in due), return_exceptions=True)
         for feed, res in zip(due, results):
-            if isinstance(res, (aiohttp.ClientError, TimeoutError, ValueError)):
-                _LOGGER.debug("SWPC %s fetch failed: %s", feed, res)
-            elif isinstance(res, BaseException):
-                raise res
+            # Any failure keeps the last good data for that feed; the others carry on.
+            if isinstance(res, Exception):
+                if feed not in self._failing:
+                    _LOGGER.warning("SWPC %s feed failed, keeping last data: %r", feed, res)
+                self._failing.add(feed)
+            elif feed in self._failing:
+                _LOGGER.info("SWPC %s feed recovered", feed)
+                self._failing.discard(feed)
         if not self._wind and "wind" not in self._fetched:
             raise UpdateFailed("No solar wind data from SWPC yet")
 
@@ -111,4 +126,10 @@ class AuroraCoordinator(DataUpdateCoordinator[Result]):
             self.thresholds,
         )
         self._last_go = result.last_go
+        if result.status == GO and self._status != GO:
+            self._go_started = now
+        elif result.status != GO and self._status == GO:
+            self._go_ended = now
+        self._status = result.status
+        result.go_started, result.go_ended = self._go_started, self._go_ended
         return result

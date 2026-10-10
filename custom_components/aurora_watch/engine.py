@@ -58,6 +58,7 @@ class Thresholds:
     # NOAA context for watch.
     watch_g_scale: int = 2
     alert_lookback_h: float = 6.0
+    alert_display_h: float = 24.0
 
 
 @dataclass(frozen=True)
@@ -112,7 +113,7 @@ class Inputs:
     g_now: int | None = None
     g_forecast: int | None = None  # max G for today and tomorrow (UTC), i.e. tonight
     sun_elevation: float | None = None
-    last_go: datetime | None = None  # when go last triggered, for the latch
+    last_go: datetime | None = None  # when a go trigger last held, for the latch
 
 
 @dataclass
@@ -144,7 +145,10 @@ class Result:
     g_forecast: int | None = None
     alert: Alert | None = None
     go_triggered: bool = False  # a fresh trigger this tick, not the latch holding
-    last_go: datetime | None = None
+    last_go: datetime | None = None  # internal: moves every tick a trigger holds
+    # Set by the coordinator; they move only when go starts or ends.
+    go_started: datetime | None = None
+    go_ended: datetime | None = None
 
 
 def _minutes(delta: timedelta) -> float:
@@ -238,7 +242,7 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
         r.data_age_min = round(_minutes(now - max(s.observed for s in inputs.wind)), 1)
     r.fresh = r.data_age_min is not None and r.data_age_min <= t.max_data_age_min
     if not r.fresh:
-        why.append("solar wind data stale or missing" if r.data_age_min is None else f"solar wind data {r.data_age_min:.0f} min old")
+        why.append("solar wind data missing" if r.data_age_min is None else f"solar wind data over {t.max_data_age_min:g} min old")
 
     for name in ("bz", "bt", "speed", "density"):
         latest = next((getattr(s, name) for s in reversed(arrived) if getattr(s, name) is not None), None)
@@ -285,20 +289,20 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
         r.dark = inputs.sun_elevation <= t.sun_dark_elevation
     r.watch, r.watch_reason = watch_active(inputs, t)
     r.g_now, r.g_forecast = inputs.g_now, inputs.g_forecast
-    geo = [a for a in inputs.alerts if a.geomagnetic]
+    geo = [a for a in inputs.alerts if a.geomagnetic and now - a.issued < timedelta(hours=t.alert_display_h)]
     r.alert = max(geo, key=lambda a: a.issued) if geo else None
 
     # --- Decide ---
     onset = r.onset and loaded_recently
     trigger = onset or r.strong
     if r.loaded:
-        why.append(f"Bz <= {t.bz_south:g} for {r.bz_south_fraction:.0%} of the last {t.south_window_min} min")
+        why.append(f"Bz <= {t.bz_south:g} for most of the last {t.south_window_min} min")
     if r.shock:
         why.append("density spike - likely shock arrival")
     if r.strong:
-        why.append(f"strong driving: mean Bz {r.bz_mean_30:.1f} nT, speed >= {t.strong_speed:g} km/s")
+        why.append(f"strong driving: mean Bz <= {t.strong_bz_mean:g} nT, speed >= {t.strong_speed:g} km/s")
     if r.onset:
-        why.append(f"GOES-{r.goes_satellite} Hp up {r.hp_rise:.0f} nT - substorm onset" + ("" if loaded_recently else ", but not loaded beforehand"))
+        why.append(f"GOES-{r.goes_satellite} Hp jump - substorm onset" + ("" if loaded_recently else ", but not loaded beforehand"))
     elif goes_note and (r.loaded or r.strong):
         why.append(goes_note)
 
@@ -306,7 +310,8 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
     can_go = r.fresh and reach and r.dark is True
     if can_go and trigger:
         r.status, r.go_triggered = GO, True
-    elif can_go and latch:
+    elif latch and reach and r.dark is True:
+        # Not gated on fresh: one late SWPC update mid-expansion must not drop go.
         r.status = GO
         why.append("holding go through the expansion phase")
     elif r.fresh and (r.loaded or r.shock or trigger):

@@ -37,13 +37,10 @@ def _status_attrs(r: Result) -> dict[str, Any]:
         "onset": r.onset,
         "watch": r.watch,
         "watch_reason": r.watch_reason,
-        "bz": r.bz,
-        "speed": r.speed,
-        "minutes_south": r.minutes_south,
-        "kp": r.kp,
         "kp_trigger": r.kp_reach,
         "goes_satellite": r.goes_satellite,
-        "last_go": r.last_go.isoformat() if r.last_go else None,
+        "go_started": r.go_started.isoformat() if r.go_started else None,
+        "go_ended": r.go_ended.isoformat() if r.go_ended else None,
     }
 
 
@@ -94,6 +91,8 @@ def device_info() -> DeviceInfo:
 
 class AuroraSensor(CoordinatorEntity[AuroraCoordinator], SensorEntity):
     _attr_has_entity_name = True
+    # The alert's full text is for the dashboard, not for history.
+    _unrecorded_attributes = frozenset({"message"})
     _attr_attribution = ATTRIBUTION
     entity_description: AuroraSensorDescription
 
