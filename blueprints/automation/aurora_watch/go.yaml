@@ -1,0 +1,132 @@
+blueprint:
+  name: Aurora Watch - go now
+  description: >-
+    Time-sensitive push when Aurora Watch changes to go, and an optional note when it
+    goes quiet again. It fires on the change into go, never on a timer, so a storm that
+    lasts all night does not repeat itself.
+  domain: automation
+  source_url: https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/go.yaml
+  input:
+    status_entity:
+      name: Status sensor
+      default: sensor.aurora_watch_status
+      selector:
+        entity:
+          filter:
+            - integration: aurora_watch
+              domain: sensor
+    notify_service:
+      name: Notify service
+      description: The Companion app notify service, e.g. notify.mobile_app_tonys_iphone
+      default: notify.mobile_app_tonys_iphone
+      selector:
+        text: {}
+    weather_entity:
+      name: Weather entity with cloud_coverage
+      description: Adds "but N% cloud" to the push. Clouds never suppress it.
+      default: weather.forecast_home
+      selector:
+        entity:
+          filter:
+            - domain: weather
+    cooldown:
+      name: Cooldown (minutes)
+      description: If go ends and comes back within this time, stay silent.
+      default: 45
+      selector:
+        number:
+          min: 0
+          max: 240
+          unit_of_measurement: min
+    critical:
+      name: Critical alert
+      description: Sound even in silent mode or a Focus. Off means time-sensitive.
+      default: false
+      selector:
+        boolean: {}
+    send_clear:
+      name: Send a note when it goes quiet again
+      default: true
+      selector:
+        boolean: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  status_entity: !input status_entity
+  notify_service: !input notify_service
+  weather_entity: !input weather_entity
+  cooldown: !input cooldown
+  critical: !input critical
+  send_clear: !input send_clear
+
+triggers:
+  - trigger: state
+    entity_id: !input status_entity
+    to: go
+    id: go
+  - trigger: state
+    entity_id: !input status_entity
+    from: [go, elevated]
+    to: quiet
+    for: "00:10:00"
+    id: clear
+
+conditions:
+  # Both read go_started/go_ended, which move only when go starts or ends, so the clear
+  # note can never eat the cooldown of a real go.
+  - condition: template
+    value_template: >-
+      {% set a = trigger.to_state.attributes %}
+      {% if trigger.id == 'go' %}
+        {{ a.go_ended is none
+           or (now() - as_datetime(a.go_ended)).total_seconds() > cooldown * 60 }}
+      {% else %}
+        {{ send_clear and a.go_ended is not none
+           and (now() - as_datetime(a.go_ended)).total_seconds() < 6 * 3600 }}
+      {% endif %}
+
+actions:
+  - variables:
+      cloud: "{{ state_attr(weather_entity, 'cloud_coverage') }}"
+      cloud_note: >-
+        {% if cloud is number and cloud >= 50 %} - but {{ cloud | round(0) | int }}% cloud{% endif %}
+      body: >-
+        Bz {{ states('sensor.aurora_watch_bz') | float(0) | round(1) }} nT, south
+        {{ states('sensor.aurora_watch_minutes_south') | int(0) }} min, wind
+        {{ states('sensor.aurora_watch_solar_wind_speed') | float(0) | round(0) | int }} km/s, Kp
+        {{ states('sensor.aurora_watch_kp_estimated') | float(0) | round(1) }}{{ cloud_note }}.
+        {{ (state_attr(status_entity, 'reasons') or [])[:2] | join('; ') }}
+  - choose:
+      - conditions: "{{ trigger.id == 'clear' }}"
+        sequence:
+          - action: "{{ notify_service }}"
+            data:
+              title: Aurora - quiet again
+              message: The substorm has faded. Status is back to quiet.
+              data:
+                tag: aurora-watch
+      - conditions: "{{ critical }}"
+        sequence:
+          - action: "{{ notify_service }}"
+            data:
+              title: "Aurora: go outside now"
+              message: "{{ body }}"
+              data:
+                tag: aurora-watch
+                push:
+                  interruption-level: critical
+                  sound:
+                    name: default
+                    critical: 1
+                    volume: 1.0
+    default:
+      - action: "{{ notify_service }}"
+        data:
+          title: "Aurora: go outside now"
+          message: "{{ body }}"
+          data:
+            tag: aurora-watch
+            push:
+              interruption-level: time-sensitive

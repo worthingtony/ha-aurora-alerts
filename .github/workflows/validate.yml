@@ -1,0 +1,39 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Engine and integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements_test.txt
+      - run: pytest -q tests
+
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  # HACS reads file contents from the version it would install: the default branch,
+  # until there are releases. So on a PR the manifest and hacs.json checks see main, not
+  # the PR; the push to main after merge is the run that counts for them.
+  # description and topics are GitHub repo settings that only HACS's default store
+  # requires; this repo is installed as a custom repository.
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          ignore: brands description topics

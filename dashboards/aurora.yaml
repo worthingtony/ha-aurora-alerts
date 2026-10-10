@@ -1,0 +1,134 @@
+# Aurora Watch dashboard. Phone first: one column, status on top, Bz chart second.
+# Needs apexcharts-card (HACS, RomRider). Everything else is built in.
+# Deploy as a storage-mode dashboard (Raw configuration editor), url path `aurora`.
+title: Aurora
+views:
+  - title: Aurora
+    path: aurora
+    icon: mdi:aurora
+    type: masonry
+    cards:
+      - type: markdown
+        content: >-
+          {% set s = states('sensor.aurora_watch_status') %}
+          {% set why = state_attr('sensor.aurora_watch_status', 'reasons') or [] %}
+          {% set kind = {'go': 'success', 'elevated': 'warning', 'watch': 'info'} %}
+          {% if s in kind %}
+          <ha-alert alert-type="{{ kind[s] }}" title="{{ s | upper }}">{{ why | join(' - ') }}</ha-alert>
+          {% else %}
+          ## {{ s | upper }}
+          {{ why | join(' - ') if why else 'Nothing notable.' }}
+          {% endif %}
+
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Bz (nT), last 3 h - go needs <= -10 sustained
+          show_states: true
+          colorize_states: true
+        graph_span: 3h
+        now:
+          show: true
+        apex_config:
+          chart:
+            height: 260
+          annotations:
+            yaxis:
+              - y: -10
+                borderColor: "#e53935"
+                strokeDashArray: 4
+                label:
+                  text: "-10 threshold"
+                  borderColor: "#e53935"
+                  style:
+                    color: "#fff"
+                    background: "#e53935"
+              - y: 0
+                borderColor: "#9e9e9e"
+        series:
+          - entity: sensor.aurora_watch_bz
+            name: Bz
+            color: "#7e57c2"
+            stroke_width: 2
+            extend_to: now
+
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: GOES Hp (nT), last 6 h - a sharp rise after a dip is onset
+          show_states: true
+          colorize_states: true
+        graph_span: 6h
+        apex_config:
+          chart:
+            height: 200
+        series:
+          - entity: sensor.aurora_watch_goes_hp
+            name: Hp
+            color: "#26a69a"
+            stroke_width: 2
+
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Solar wind, last 6 h
+          show_states: true
+          colorize_states: true
+        graph_span: 6h
+        apex_config:
+          chart:
+            height: 200
+        yaxis:
+          - id: speed
+            min: 250
+          - id: density
+            opposite: true
+            min: 0
+        series:
+          - entity: sensor.aurora_watch_solar_wind_speed
+            name: Speed (km/s)
+            yaxis_id: speed
+            color: "#ffa726"
+          - entity: sensor.aurora_watch_solar_wind_density
+            name: Density (p/cm3)
+            yaxis_id: density
+            color: "#42a5f5"
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: tile
+            entity: sensor.aurora_watch_minutes_south
+          - type: tile
+            entity: sensor.aurora_watch_bt
+          - type: tile
+            entity: sensor.aurora_watch_kp_estimated
+          - type: tile
+            entity: sensor.aurora_watch_g_scale_tonight
+          - type: tile
+            entity: binary_sensor.aurora_watch_dark_enough
+          - type: tile
+            entity: weather.forecast_home
+            name: Cloud cover
+            state_content: cloud_coverage
+          - type: tile
+            entity: sensor.aurora_watch_data_age
+          - type: tile
+            entity: sensor.aurora_watch_g_scale_now
+      - type: entities
+        entities:
+          - entity: number.aurora_watch_kp_trigger
+            name: Kp needed for go
+
+      - type: markdown
+        title: Latest SWPC alert
+        content: >-
+          {% set a = 'sensor.aurora_watch_swpc_alert' %}
+          {% if states(a) not in ['unknown', 'unavailable', 'none'] %}
+          **{{ states(a) }}** - {{ as_timestamp(state_attr(a, 'issued')) | timestamp_custom('%a %H:%M') }}
+
+          <pre>{{ (state_attr(a, 'message') or '')[:1200] }}</pre>
+          {% else %}
+          No geomagnetic alerts.
+          {% endif %}
