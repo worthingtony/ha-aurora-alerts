@@ -55,8 +55,10 @@ All from NOAA SWPC, free, no key, polled every 60 s (Kp 3 min, alerts and scales
 - `json/planetary_k_index_1m.json` - estimated Kp, 1-min.
 - `products/alerts.json`, `products/noaa-scales.json`.
 
-A failed fetch keeps the last good data and `data_age` climbs; **go is impossible past 10
-minutes old.**
+A failed fetch keeps the last good data and `data_age` climbs. `data_age` is the age of the
+newest L1 measurement, normally 8-11 min because SWPC publishes the propagated product
+late. **Go needs the newest data to reach at least to 10 min ago in Earth-arrival time**,
+so an outage of about 40 min (less in a fast storm) stops it.
 
 ## Thresholds and tuning
 
@@ -72,7 +74,7 @@ Every number is in `Thresholds` at the top of
 | `goes_night_start_lt` / `goes_night_end_lt` | 20-04 local | Only the satellite near local midnight counts. On the dayside, compression and magnetopause crossings look identical to onsets - replaying 2026-10-10 found ~50 of them. |
 | `kp_reach` | 5 | Below this, substorm aurora sits around 60-65 deg geomagnetic, north of our horizon. **Tunable from the UI** as `number.aurora_watch_kp_trigger`; it survives restarts. |
 | `strong_bz_mean` / `strong_speed` | -15 nT / 600 km/s | Storm main phase lights the sky without a clean substorm. |
-| `max_data_age_min` | 10 | Never go on stale data. |
+| `max_data_age_min` | 10 | Never go on stale data, measured in Earth-arrival time: the L1 age is 8-11 min even when healthy. |
 | `sun_dark_elevation` | -12 deg | Nautical dusk. |
 | `go_latch_min` | 30 | Expansion phase lasts 15-30 min; hold go through it. |
 

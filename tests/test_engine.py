@@ -75,10 +75,20 @@ def test_storm_in_daylight_is_elevated_not_go(replay):
 def test_stale_data_never_goes(replay):
     now = utc("2026-10-10T17:40:00")
     inputs = replay.inputs(now)
-    inputs.wind = [s for s in inputs.wind if s.observed <= now - timedelta(minutes=25)]
+    inputs.wind = [s for s in inputs.wind if s.arrives <= now - timedelta(minutes=15)]
     r = engine.evaluate(inputs)
     assert not r.fresh and r.status != engine.GO
-    assert any("old" in why for why in r.reasons)
+    assert "solar wind data stale" in r.reasons
+
+
+def test_normal_swpc_lag_is_still_fresh(replay):
+    """The propagated product runs 8-11 min behind L1 (19:15:42 UTC: newest row 19:05).
+    That is normal and must not block go."""
+    now = utc("2026-10-10T17:40:00")
+    inputs = replay.inputs(now)
+    inputs.wind = [s for s in inputs.wind if s.observed <= now - timedelta(minutes=11)]
+    r = engine.evaluate(inputs)
+    assert r.data_age_min >= 11 and r.fresh and r.status == engine.GO
 
 
 def test_missing_data_is_quiet_not_a_crash(replay):
@@ -93,7 +103,7 @@ def test_one_late_update_does_not_drop_go(replay):
     cooldown ate the real go a minute later. The latch now holds through it."""
     now = utc("2026-10-10T17:40:00")
     inputs = replay.inputs(now, last_go=now - timedelta(minutes=1))
-    inputs.wind = [s for s in inputs.wind if s.observed <= now - timedelta(minutes=12)]
+    inputs.wind = [s for s in inputs.wind if s.arrives <= now - timedelta(minutes=12)]
     r = engine.evaluate(inputs)
     assert not r.fresh and r.status == engine.GO
 

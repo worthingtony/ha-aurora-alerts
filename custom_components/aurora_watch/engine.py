@@ -50,7 +50,10 @@ class Thresholds:
     goes_night_end_lt: float = 4.0
     # Hp < 0 or a step this big per minute is the satellite outside the magnetosphere.
     hp_max_step_per_min: float = 50.0
-    # Never say go on stale data.
+    # Never say go on stale data: the newest sample's Earth-arrival time may be at most
+    # this far in the past. Not measured at L1: SWPC publishes the propagated product
+    # 8-11 min after observation (seen 2026-10-10), so an L1-age cutoff of 10 min would
+    # block go most of the time, while each sample still covers ~30 min ahead.
     max_data_age_min: float = 10.0
     sun_dark_elevation: float = -12.0
     # Expansion phase: hold go this long after a trigger.
@@ -239,10 +242,12 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
     # --- Solar wind, as it arrives at Earth ---
     arrived = [s for s in inputs.wind if s.arrives <= now]
     if inputs.wind:
+        # data_age is for people: how old the newest L1 measurement is.
         r.data_age_min = round(_minutes(now - max(s.observed for s in inputs.wind)), 1)
-    r.fresh = r.data_age_min is not None and r.data_age_min <= t.max_data_age_min
+        # fresh is for the decision: does the data still reach to what is arriving now?
+        r.fresh = _minutes(now - max(s.arrives for s in inputs.wind)) <= t.max_data_age_min
     if not r.fresh:
-        why.append("solar wind data missing" if r.data_age_min is None else f"solar wind data over {t.max_data_age_min:g} min old")
+        why.append("solar wind data missing" if r.data_age_min is None else "solar wind data stale")
 
     for name in ("bz", "bt", "speed", "density"):
         latest = next((getattr(s, name) for s in reversed(arrived) if getattr(s, name) is not None), None)
