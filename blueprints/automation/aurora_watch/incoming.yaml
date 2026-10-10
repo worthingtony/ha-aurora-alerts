@@ -1,0 +1,88 @@
+blueprint:
+  name: Aurora Watch - get ready (loading incoming)
+  description: >-
+    Push when strong south Bz, or a shock, has been measured upstream and is due at Earth
+    in the next ~20-45 minutes: time to get outside or drive to a dark spot. Only when it
+    is dark or getting dark at the selected spot, and at most once per cooldown.
+  domain: automation
+  source_url: https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/incoming.yaml
+  input:
+    incoming_entity:
+      name: Loading incoming sensor
+      default: binary_sensor.aurora_watch_loading_incoming
+      selector:
+        entity:
+          filter:
+            - integration: aurora_watch
+              domain: binary_sensor
+    status_entity:
+      name: Status sensor
+      default: sensor.aurora_watch_status
+      selector:
+        entity:
+          filter:
+            - integration: aurora_watch
+              domain: sensor
+    notify_service:
+      name: Notify service
+      default: notify.mobile_app_tonys_iphone
+      selector:
+        text: {}
+    max_sun_elevation:
+      name: Only when the sun is below (deg)
+      description: -6 is civil dusk, so a warning can arrive while it is still getting dark.
+      default: -6
+      selector:
+        number:
+          min: -18
+          max: 0
+          unit_of_measurement: deg
+    cooldown:
+      name: Cooldown (minutes)
+      default: 60
+      selector:
+        number:
+          min: 0
+          max: 240
+          unit_of_measurement: min
+
+mode: single
+max_exceeded: silent
+
+variables:
+  status_entity: !input status_entity
+  notify_service: !input notify_service
+  max_sun_elevation: !input max_sun_elevation
+  cooldown: !input cooldown
+
+triggers:
+  - trigger: state
+    entity_id: !input incoming_entity
+    from: "off"
+    to: "on"
+
+conditions:
+  - condition: template
+    value_template: >-
+      {% set elev = state_attr(status_entity, 'sun_elevation') %}
+      {{ elev is number and elev <= max_sun_elevation
+         and states(status_entity) != 'go'
+         and (this.attributes.last_triggered is none
+              or (now() - this.attributes.last_triggered).total_seconds() > cooldown * 60) }}
+
+actions:
+  - variables:
+      arrives: "{{ trigger.to_state.attributes.arrives }}"
+      minutes: >-
+        {{ ((as_datetime(arrives) - now()).total_seconds() / 60) | round(0) | int if arrives else 0 }}
+  - action: "{{ notify_service }}"
+    data:
+      title: "Aurora: get ready"
+      message: >-
+        {{ trigger.to_state.attributes.reason | default('South Bz incoming') }} - about
+        {{ [minutes, 0] | max }} min from now. Kp {{ states('sensor.aurora_watch_kp_estimated') | float(0) | round(1) }},
+        trigger {{ states('number.aurora_watch_kp_trigger') }} at {{ states('select.aurora_watch_location') }}.
+      data:
+        tag: aurora-watch-incoming
+        push:
+          interruption-level: time-sensitive

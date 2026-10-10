@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from .coordinator import AuroraCoordinator
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.NUMBER]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.NUMBER, Platform.SELECT]
 
 type AuroraConfigEntry = ConfigEntry[AuroraCoordinator]
 

@@ -109,7 +109,7 @@ dipolarization at 08:16 UTC). Plus synthetic gaps, stale data and a spacecraft s
 | | Scope |
 |---|---|
 | **v1** | sources above, engine, entities, config flow, blueprints, dashboard, tests |
-| **v1.1** | Glendale and Churchill as extra onset votes; options flow if tuning by editing `engine.py` gets old |
+| **v1.1** (2026-10-10) | saved spots (zones), loading incoming with a get-ready push, Glendale as a second onset vote. Next: Churchill, follow the phone |
 | **later** | Facebook (below), an event log for tuning against what was actually seen |
 
 **Facebook is deliberately outside the integration.** Meta has had no Groups API since

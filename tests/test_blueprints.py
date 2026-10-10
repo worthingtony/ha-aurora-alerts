@@ -69,3 +69,24 @@ async def test_go_pushes_time_sensitive_then_clears(hass, freezer):
     _status(hass, "go", go_started=dt_util.utcnow().isoformat(), go_ended=ended.isoformat())
     await hass.async_block_till_done()
     assert len(calls) == 2
+
+
+async def test_incoming_pushes_once_when_getting_dark(hass, freezer):
+    calls = async_mock_service(hass, "notify", "mobile_app_tonys_iphone")
+    hass.states.async_set("binary_sensor.aurora_watch_loading_incoming", "off", {})
+    _status(hass, "elevated", sun_elevation=-8.0)
+    await _automation(hass, "incoming")
+    soon = (dt_util.utcnow() + timedelta(minutes=25)).isoformat()
+    hass.states.async_set("binary_sensor.aurora_watch_loading_incoming", "on",
+                          {"arrives": soon, "reason": "south Bz arriving ~17:02 UTC"})
+    await hass.async_block_till_done()
+    assert len(calls) == 1 and calls[0].data["title"] == "Aurora: get ready"
+    assert "25 min" in calls[0].data["message"] or "24 min" in calls[0].data["message"]
+
+    # Daylight: no push.
+    hass.states.async_set("binary_sensor.aurora_watch_loading_incoming", "off", {})
+    _status(hass, "elevated", sun_elevation=20.0)
+    freezer.tick(timedelta(hours=2))
+    hass.states.async_set("binary_sensor.aurora_watch_loading_incoming", "on", {"arrives": soon, "reason": "x"})
+    await hass.async_block_till_done()
+    assert len(calls) == 1

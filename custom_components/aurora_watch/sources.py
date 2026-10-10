@@ -6,10 +6,12 @@ gone (404); SWPC retired them in 2026.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import html
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .engine import Alert, HpSample, KpSample, WindSample
+from .engine import GLENDALE_LEVELS, Alert, GlendaleAlert, HpSample, KpSample, WindSample
 
 BASE = "https://services.swpc.noaa.gov"
 # 1-min L1 wind and IMF, time-shifted to Earth arrival. The 1-hour file is 7 KB; the
@@ -22,6 +24,40 @@ GOES_LONGITUDES = "/json/goes/satellite-longitudes.json"
 KP_1M = "/json/planetary_k_index_1m.json"
 ALERTS = "/products/alerts.json"
 SCALES = "/products/noaa-scales.json"
+
+
+GLENDALE_URL = "https://t.me/s/GlendaleApp"
+
+
+def parse_glendale(page: str, now: datetime | None = None) -> list[GlendaleAlert]:
+    """The Glendale App's public Telegram preview. Its posts are plain sentences:
+    'ORANGE ALERT : Moderate geomagnetic substorm in progress. ...' and
+    'INTERPLANETARY SHOCK detected that will hit Earth at ~15:31 UTC ...'."""
+    out = []
+    blocks = re.split(r'<div class="tgme_widget_message_wrap', page)[1:]
+    for block in blocks:
+        text_m = re.search(r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', block, re.S)
+        time_m = re.search(r'<time datetime="([^"]+)"', block)
+        if not (text_m and time_m):
+            continue
+        try:
+            posted = datetime.fromisoformat(time_m.group(1)).astimezone(timezone.utc)
+        except ValueError:
+            continue
+        text = html.unescape(re.sub(r"<[^>]+>", "", re.sub(r"<br\s*/?>", "\n", text_m.group(1)))).strip()
+        first = text.splitlines()[0].strip() if text else ""
+        level_m = re.match(r"([A-Z]+) ALERT\s*:\s*(.*?substorm in progress)", first)
+        if level_m and level_m.group(1) in GLENDALE_LEVELS:
+            out.append(GlendaleAlert(posted, GLENDALE_LEVELS[level_m.group(1)], f"{level_m.group(1).title()} alert - {level_m.group(2)}"))
+            continue
+        eta_m = re.search(r"(SHOCK|IMF ENHANCEMENT).*?hit Earth at ~(\d{1,2}):(\d{2}) UTC", first)
+        if eta_m:
+            arrives = posted.replace(hour=int(eta_m.group(2)), minute=int(eta_m.group(3)), second=0, microsecond=0)
+            if arrives < posted - timedelta(hours=1):  # past midnight UTC
+                arrives += timedelta(days=1)
+            kind = "Interplanetary shock" if eta_m.group(1) == "SHOCK" else "IMF enhancement"
+            out.append(GlendaleAlert(posted, 0, f"{kind} arriving ~{arrives:%H:%M} UTC", arrives))
+    return sorted(out, key=lambda g: g.posted)
 
 
 def parse_time(value: Any) -> datetime | None:

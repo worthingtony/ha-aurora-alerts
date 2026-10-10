@@ -5,7 +5,9 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from conftest import load
+import gzip
+
+from conftest import FIXTURES, load
 from custom_components.aurora_watch import sources
 from custom_components.aurora_watch.const import DOMAIN
 
@@ -30,7 +32,18 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 def swpc(aioclient_mock):
     for path, fixture in FEEDS.items():
         aioclient_mock.get(sources.BASE + path, json=load(fixture))
+    with gzip.open(FIXTURES / "glendale-telegram.html.gz", "rt") as f:
+        aioclient_mock.get(sources.GLENDALE_URL, text=f.read())
     return aioclient_mock
+
+
+async def _setup(hass, elevation=-20.0):
+    hass.states.async_set("sun.sun", "below_horizon", {"elevation": elevation})
+    entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
 
 
 async def test_config_flow_is_single_instance(hass):
@@ -108,3 +121,42 @@ async def test_swpc_down_at_startup_retries(hass, aioclient_mock):
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.state is config_entries.ConfigEntryState.SETUP_RETRY
+
+
+async def test_new_entities_exist(hass, swpc, freezer):
+    freezer.move_to("2026-10-10T17:52:00+00:00")
+    await _setup(hass)
+    assert hass.states.get("binary_sensor.aurora_watch_loading_incoming") is not None
+    glendale = hass.states.get("sensor.aurora_watch_glendale")
+    assert glendale.state.startswith("Extreme alert") and glendale.attributes["level"] == 6
+    assert hass.states.get("sensor.aurora_watch_status").attributes["glendale_onset"]
+    hp = hass.states.get("sensor.aurora_watch_goes_hp")
+    assert hp.state not in ("unknown", "unavailable") and hp.attributes["night_side"] is False
+
+
+async def test_saved_spot_sets_darkness_and_its_own_kp(hass, swpc, freezer):
+    """22:30 UTC Oct 10: dusk. Pick a spot far east, where it is already dark, then back."""
+    freezer.move_to("2026-10-10T23:40:00+00:00")
+    hass.states.async_set("zone.home", "0", {"latitude": 43.0, "longitude": -88.0, "friendly_name": "Home"})
+    hass.states.async_set("zone.ottawa_lake", "0", {"latitude": 42.94, "longitude": -88.47, "friendly_name": "Ottawa Lake"})
+    hass.states.async_set("zone.far_east", "0", {"latitude": 43.0, "longitude": -60.0, "friendly_name": "Far east"})
+    await _setup(hass)
+
+    select = hass.states.get("select.aurora_watch_location")
+    assert select.state == "Home" and select.attributes["options"][0] == "Home"
+    assert "Ottawa Lake" in select.attributes["options"]
+    assert hass.states.get("binary_sensor.aurora_watch_dark_enough").state == "off"  # sun -4.9 deg at home
+
+    await hass.services.async_call("select", "select_option", {"entity_id": "select.aurora_watch_location", "option": "Far east"}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.aurora_watch_dark_enough").state == "on"
+    assert hass.states.get("sensor.aurora_watch_status").attributes["location"] == "zone.far_east"
+
+    # Each spot keeps its own Kp trigger.
+    await hass.services.async_call("number", "set_value", {"entity_id": "number.aurora_watch_kp_trigger", "value": 4}, blocking=True)
+    await hass.services.async_call("select", "select_option", {"entity_id": "select.aurora_watch_location", "option": "Home"}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get("number.aurora_watch_kp_trigger").state == "5.0"
+    await hass.services.async_call("select", "select_option", {"entity_id": "select.aurora_watch_location", "option": "Far east"}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get("number.aurora_watch_kp_trigger").state == "4.0"

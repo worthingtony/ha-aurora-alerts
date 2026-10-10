@@ -15,6 +15,8 @@ INTERVALS = {
     "alerts": timedelta(minutes=15),
     "scales": timedelta(minutes=15),
     "longitudes": timedelta(hours=24),
+    "glendale": timedelta(minutes=2),
 }
+HOME_ZONE = "zone.home"
 # Keep this much solar wind history in memory: the onset gate looks back 120 min.
 WIND_HISTORY = timedelta(hours=4)

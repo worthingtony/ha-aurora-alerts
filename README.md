@@ -30,19 +30,40 @@ Design and reasoning: [ARCHITECTURE.md](ARCHITECTURE.md).
 5. **Notifications:** import the two blueprints, then create one automation from each:
    - `https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/go.yaml`
    - `https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/watch.yaml`
+   - `https://github.com/worthingtony/ha-aurora-alerts/blob/main/blueprints/automation/aurora_watch/incoming.yaml`
+     (the "get ready" push, 20-45 min ahead)
 
    On iOS, allow **Time Sensitive Notifications** for the Home Assistant app, or the go push
    arrives as a normal one.
 
 HA's core `aurora` integration (OVATION probability) is unrelated and can coexist.
 
+## Saved spots, get ready, Glendale (v1.1)
+
+- **Saved spots.** Every Home Assistant zone is a spot (Settings - Areas, labels and
+  zones - Zones; add one per dark site). `select.aurora_watch_location` picks the spot;
+  darkness is computed for it, and `number.aurora_watch_kp_trigger` remembers a value
+  per spot. A dark site sees fainter aurora, so its trigger can sit lower than home's.
+  Ottawa Lake Campground (Kettle Moraine South, ~42.94N 88.47W) is a little *south* of
+  Wauwatosa: the gain there is sky darkness, not latitude.
+- **Get ready.** `binary_sensor.aurora_watch_loading_incoming` turns on when the newest
+  upstream data (not yet arrived) is south of the Bz threshold, or Glendale reports a
+  shock on the way. On the 2026-10-10 storm it gave 27 min warning. Its `arrives`
+  attribute is the expected arrival time; the `incoming` blueprint pushes once, at
+  dusk or later.
+- **Glendale.** The Glendale App's public Telegram channel (t.me/s/GlendaleApp) is read
+  every 2 min: an orange-or-higher "substorm in progress" in the last 20 min is a second
+  onset vote beside GOES, and its shock warnings feed "get ready". Nothing to set up.
+  It is still gated on loading, darkness and the Kp trigger, like a GOES onset.
+
 ## Entities
 
 `sensor.aurora_watch_`: `status`, `bz`, `bt`, `solar_wind_speed`, `solar_wind_density`,
 `bz_south_fraction`, `minutes_south`, `goes_hp`, `kp_estimated`, `g_scale_now`,
 `g_scale_tonight`, `data_age`, `swpc_alert` (full text in `message`),
-`binary_sensor.aurora_watch_dark_enough`, and `number.aurora_watch_kp_trigger` (the Kp go
-needs, default 5).
+`glendale`, `binary_sensor.aurora_watch_dark_enough`, `binary_sensor.aurora_watch_loading_incoming`,
+`select.aurora_watch_location`, and `number.aurora_watch_kp_trigger` (the Kp go needs at the
+selected spot, default 5).
 
 ## Data
 
@@ -96,8 +117,8 @@ says go outside the storm.
 
 ## Not in v1
 
-- Glendale App's Telegram alerts and the Churchill (NRCan) ground magnetometer as extra
-  onset votes.
+- The Churchill (NRCan) ground magnetometer as a third onset vote.
+- Following the phone's location (`device_tracker`) as a spot.
 - **Facebook.** Meta has no Groups API since 2024 and Page access needs business
   verification. Vince's public Page can come in as RSS (rss.app or FetchRSS) through the
   core `feedreader` integration; private groups only through notification emails and the
