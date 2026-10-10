@@ -71,6 +71,7 @@ class Thresholds:
     watch_g_scale: int = 2
     alert_lookback_h: float = 6.0
     alert_display_h: float = 24.0
+    recent_count: int = 8  # alerts listed when you open the Glendale or SWPC sensor
 
 
 @dataclass(frozen=True)
@@ -123,6 +124,7 @@ class GlendaleAlert:
     level: int  # GLENDALE_LEVELS, or 0 for a shock / IMF warning
     text: str
     arrives: datetime | None = None  # for shock and IMF-enhancement warnings
+    url: str | None = None  # the post on Telegram
 
 
 @dataclass
@@ -158,6 +160,8 @@ class Result:
     goes_night_side: bool = False
     glendale_onset: bool = False
     glendale: GlendaleAlert | None = None  # latest substorm alert, for display
+    glendale_recent: list[GlendaleAlert] = field(default_factory=list)  # newest first
+    alerts_recent: list[Alert] = field(default_factory=list)  # geomagnetic, newest first
     incoming: bool = False
     incoming_at: datetime | None = None  # absolute, so attributes don't tick every minute
     incoming_reason: str | None = None
@@ -338,10 +342,12 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
     r.g_now, r.g_forecast = inputs.g_now, inputs.g_forecast
     geo = [a for a in inputs.alerts if a.geomagnetic and now - a.issued < timedelta(hours=t.alert_display_h)]
     r.alert = max(geo, key=lambda a: a.issued) if geo else None
+    r.alerts_recent = sorted(geo, key=lambda a: a.issued, reverse=True)[: t.recent_count]
 
     # --- Glendale: a second onset vote, from ground magnetometers ---
     substorms = [g for g in inputs.glendale if g.level > 0 and g.posted <= now]
     r.glendale = substorms[-1] if substorms else None
+    r.glendale_recent = [g for g in reversed(inputs.glendale) if g.posted <= now][: t.recent_count]
     r.glendale_onset = any(
         g.level >= t.glendale_min_level and now - g.posted <= timedelta(minutes=t.glendale_window_min) for g in substorms
     )
