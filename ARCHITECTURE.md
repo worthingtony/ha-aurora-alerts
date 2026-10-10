@@ -31,8 +31,9 @@ So **Bz loads, GOES Hp triggers, and estimated Kp says whether the oval reaches 
   nulls, and report the newest timestamp.
 - **Home Assistant layer:** one `DataUpdateCoordinator` ticking every 60 s, which refreshes
   each feed on its own interval. A config flow (location from the home zone, darkness from
-  `sun.sun`). **No options flow in v1:** thresholds are constants in `const.py`, all in one
-  place, so they are easy to tune after real events.
+  `sun.sun`). **No options flow in v1:** thresholds are constants in `engine.Thresholds`, all
+  in one place. The exception is the Kp trigger, `number.aurora_watch_kp_trigger`, because
+  how far south is worth going out for is a judgement call (Tony, 2026-10-10).
 - No new Python dependencies; it uses Home Assistant's own `aiohttp`. HAOS on the Pi 5,
   installed as a HACS custom repo.
 

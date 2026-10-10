@@ -116,6 +116,10 @@ views:
             entity: sensor.aurora_watch_data_age
           - type: tile
             entity: sensor.aurora_watch_g_scale_now
+      - type: entities
+        entities:
+          - entity: number.aurora_watch_kp_trigger
+            name: Kp needed for go
 
       - type: markdown
         title: Latest SWPC alert

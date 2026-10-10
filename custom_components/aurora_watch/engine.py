@@ -134,6 +134,7 @@ class Result:
     hp_rise: float | None = None
     onset: bool = False
     kp: float | None = None
+    kp_reach: float | None = None
     dark: bool | None = None
     data_age_min: float | None = None
     fresh: bool = False
@@ -278,6 +279,7 @@ def evaluate(inputs: Inputs, t: Thresholds = Thresholds()) -> Result:
     # --- Reach, darkness, context ---
     kp_now = [k.kp for k in inputs.kp if _minutes(now - k.time) <= t.kp_window_min]
     r.kp = max(kp_now) if kp_now else None
+    r.kp_reach = t.kp_reach
     reach = r.kp is not None and r.kp >= t.kp_reach
     if inputs.sun_elevation is not None:
         r.dark = inputs.sun_elevation <= t.sun_dark_elevation

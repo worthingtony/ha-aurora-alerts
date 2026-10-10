@@ -69,6 +69,25 @@ async def test_storm_after_dark_is_go(hass, swpc, freezer):
     assert any(str(call[1]).endswith(sources.WIND_7D) for call in swpc.mock_calls)
 
 
+async def test_kp_trigger_is_tunable_from_the_ui(hass, swpc, freezer):
+    freezer.move_to("2026-10-10T17:35:00+00:00")
+    hass.states.async_set("sun.sun", "below_horizon", {"elevation": -20.0})
+    entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("number.aurora_watch_kp_trigger").state == "5.0"
+    assert hass.states.get("sensor.aurora_watch_status").state == "go"
+
+    await hass.services.async_call("number", "set_value", {"entity_id": "number.aurora_watch_kp_trigger", "value": 8}, blocking=True)
+    await hass.async_block_till_done()
+    status = hass.states.get("sensor.aurora_watch_status")
+    assert status.attributes["kp_trigger"] == 8
+    # Kp ~6 now, under the new trigger: still loaded, no longer go. The latch holds go
+    # only while Kp reaches, so it drops too.
+    assert status.state == "elevated"
+
+
 async def test_daylight_is_not_go(hass, swpc, freezer):
     freezer.move_to("2026-10-10T17:35:00+00:00")
     hass.states.async_set("sun.sun", "above_horizon", {"elevation": 35.0})

@@ -41,6 +41,7 @@ def _status_attrs(r: Result) -> dict[str, Any]:
         "speed": r.speed,
         "minutes_south": r.minutes_south,
         "kp": r.kp,
+        "kp_trigger": r.kp_reach,
         "goes_satellite": r.goes_satellite,
         "last_go": r.last_go.isoformat() if r.last_go else None,
     }

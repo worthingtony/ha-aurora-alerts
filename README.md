@@ -40,8 +40,9 @@ HA's core `aurora` integration (OVATION probability) is unrelated and can coexis
 
 `sensor.aurora_watch_`: `status`, `bz`, `bt`, `solar_wind_speed`, `solar_wind_density`,
 `bz_south_fraction`, `minutes_south`, `goes_hp`, `kp_estimated`, `g_scale_now`,
-`g_scale_tonight`, `data_age`, `swpc_alert` (full text in `message`), and
-`binary_sensor.aurora_watch_dark_enough`.
+`g_scale_tonight`, `data_age`, `swpc_alert` (full text in `message`),
+`binary_sensor.aurora_watch_dark_enough`, and `number.aurora_watch_kp_trigger` (the Kp go
+needs, default 5).
 
 ## Data
 
@@ -69,7 +70,7 @@ Every number is in `Thresholds` at the top of
 | `loaded_minutes` in `loaded_lookback_min` | 30 in 120 min | An onset only counts if the magnetosphere was loaded. Onsets often follow a northward turning, so this looks back, not at now. |
 | `onset_rise_nt` / `onset_decline_nt` | 15 / 20 nT | Hp up 15 nT within 10 min after dropping 20 nT over the prior 2 h: the dipolarization Vince watches for. |
 | `goes_night_start_lt` / `goes_night_end_lt` | 20-04 local | Only the satellite near local midnight counts. On the dayside, compression and magnetopause crossings look identical to onsets - replaying 2026-10-10 found ~50 of them. |
-| `kp_reach` | 5 | Below this, substorm aurora sits around 60-65 deg geomagnetic, north of our horizon. |
+| `kp_reach` | 5 | Below this, substorm aurora sits around 60-65 deg geomagnetic, north of our horizon. **Tunable from the UI** as `number.aurora_watch_kp_trigger`; it survives restarts. |
 | `strong_bz_mean` / `strong_speed` | -15 nT / 600 km/s | Storm main phase lights the sky without a clean substorm. |
 | `max_data_age_min` | 10 | Never go on stale data. |
 | `sun_dark_elevation` | -12 deg | Nautical dusk. |
@@ -99,4 +100,5 @@ says go outside the storm.
   verification. Vince's public Page can come in as RSS (rss.app or FetchRSS) through the
   core `feedreader` integration; private groups only through notification emails and the
   core `imap` integration. Neither needs code here.
-- An options flow. Edit `engine.py` until that gets old.
+- An options flow. The Kp trigger is a number entity; the rest live in `engine.py` until
+  editing them gets old.
